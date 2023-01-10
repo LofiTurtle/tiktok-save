@@ -47,10 +47,6 @@ if len(videos) == 0:
     print("Nothing new to download")
     sys.exit()
 
-for video in videos:
-    print(video)
-sys.exit()
-
 # Save videos and metadata
 failures = []
 for video in tqdm(videos):
