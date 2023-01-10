@@ -15,11 +15,17 @@ parser.add_argument("mode", type=str, nargs=1, choices=["liked", "bookmarked"], 
 parser.add_argument("source", type=str, nargs=1, help="The tiktok JSON file.")
 parser.add_argument("location", type=str, nargs=1, help="The folder to save to.")
 parser.add_argument("--failures", type=bool, nargs='?', const=True, default=False, help="Look at previous failures.")
+parser.add_argument("--pretty-names", type=bool, nargs='?', const=True, default=False,
+                    help="Include username and caption in video file name")
+parser.add_argument('--no-json', type=bool, nargs='?', const=True, default=False,
+                    help='Skip saving the JSON metadata about the video')
 args = parser.parse_args()
 mode = args.mode[0]
 source = args.source[0]
 location = args.location[0]
 check_failures = args.failures
+pretty_names = args.pretty_names
+save_json = not args.no_json
 
 # Open JSON
 with open(source, encoding="utf8") as f: data = json.load(f)
@@ -27,7 +33,7 @@ with open(source, encoding="utf8") as f: data = json.load(f)
 # Get list
 activity = data["Activity"]
 videos = activity["Like List"]["ItemFavoriteList"] if mode == "liked" else \
- activity["Favorite Videos"]["FavoriteVideoList"]
+    activity["Favorite Videos"]["FavoriteVideoList"]
 
 # Initialise tiktok API connector
 api = TikTokApi.get_instance()
@@ -41,6 +47,10 @@ if len(videos) == 0:
     print("Nothing new to download")
     sys.exit()
 
+for video in videos:
+    print(video)
+sys.exit()
+
 # Save videos and metadata
 failures = []
 for video in tqdm(videos):
@@ -49,13 +59,15 @@ for video in tqdm(videos):
     tiktok_dict = api.get_tiktok_by_id(tiktok_id, custom_did=did)
     try:
         tiktok_data = api.get_video_by_tiktok(tiktok_dict, custom_did=did)
-        if check_failures: remove_failure(tiktok_id, location)
+        if check_failures:
+            remove_failure(tiktok_id, location)
     except Exception as e:
         failures.append(tiktok_dict)
         record_failure(tiktok_id, location)
         continue
-    save_files(location, tiktok_dict, tiktok_data, timestamp, tiktok_id)
-    time.sleep(1) # don't be suspicious
+    save_files(location, tiktok_dict, tiktok_data, timestamp, tiktok_id, pretty_names, save_json)
+    time.sleep(1)  # don't be suspicious
 
 # Any problems to report?
-if len(failures): print("Failed downloads:", len(failures))
+if len(failures):
+    print("Failed downloads:", len(failures))
