@@ -2,9 +2,12 @@
 
 import argparse
 import json
+import socket
 import sys
 import random
 import time
+import traceback
+
 from tqdm import tqdm
 from TikTokApi import TikTokApi
 from utilities import *
@@ -50,19 +53,25 @@ if len(videos) == 0:
 # Save videos and metadata
 failures = []
 for video in tqdm(videos):
-    timestamp = date_to_timestamp(video["Date"])
-    tiktok_id = video_url_to_id(video.get("Link", video.get("VideoLink")))
-    tiktok_dict = api.get_tiktok_by_id(tiktok_id, custom_did=did)
-    try:
-        tiktok_data = api.get_video_by_tiktok(tiktok_dict, custom_did=did)
-        if check_failures:
-            remove_failure(tiktok_id, location)
-    except Exception as e:
-        failures.append(tiktok_dict)
-        record_failure(tiktok_id, location)
-        continue
-    save_files(location, tiktok_dict, tiktok_data, timestamp, tiktok_id, pretty_names, save_json)
-    time.sleep(1)  # don't be suspicious
+    for attempt in range(3):  # try up to 3 times for videos that fail with gaierror
+        try:
+            # catch intermittent gaierror that somehow isn't caught by the inner try block
+            timestamp = date_to_timestamp(video["Date"])
+            tiktok_id = video_url_to_id(video.get("Link", video.get("VideoLink")))
+            tiktok_dict = api.get_tiktok_by_id(tiktok_id, custom_did=did)
+            try:
+                tiktok_data = api.get_video_by_tiktok(tiktok_dict, custom_did=did)
+                if check_failures:
+                    remove_failure(tiktok_id, location)
+            except KeyError as e:
+                failures.append(tiktok_dict)
+                record_failure(tiktok_id, location)
+                break  # break out of attempt loop, this video just isn't available
+            save_files(location, tiktok_dict, tiktok_data, timestamp, tiktok_id, pretty_names, save_json)
+            time.sleep(1)  # don't be suspicious
+            break  # break out of attempt loop
+        except socket.gaierror as e:
+            time.sleep(10)  # might be a rate limit / timeout issue, so sleep longer just in case
 
 # Any problems to report?
 if len(failures):
